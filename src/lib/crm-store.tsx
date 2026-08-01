@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 export type ParcelaStatus = "pendente" | "pago" | "atrasado";
 
@@ -40,89 +41,165 @@ const dayOffset = (n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-const clientesIniciais: Cliente[] = [
-  { id: "c1", nome: "Marina Albuquerque", telefone: "+55 11 98832-1044" },
-  { id: "c2", nome: "Rafael Tavares", telefone: "+55 21 99120-7781" },
-  { id: "c3", nome: "Studio Nord Arquitetura", telefone: "+55 11 3355-2210" },
-  { id: "c4", nome: "Camila Bezerra", telefone: "+55 85 98771-3390" },
-  { id: "c5", nome: "Otávio Lins", telefone: "+55 31 99604-2255" },
-  { id: "c6", nome: "Padaria Trigo & Sal", telefone: "+55 41 3022-8890" },
-  { id: "c7", nome: "Beatriz Moraes", telefone: "+55 51 98410-6677" },
-];
+const configPadrao: WhatsappConfig = {
+  provider: "meta",
+  apiToken: "",
+  instanceUrl: "",
+  phoneNumberId: "",
+  businessAccountId: "",
+  sessionName: "default",
+  status: "desconectado",
+  mensagemPadrao:
+    "Olá {{cliente}}, sua parcela de {{valor}} referente a {{descricao}} vence em {{vencimento}}. Qualquer dúvida, estamos por aqui!",
+  enviarAutomatico: true,
+};
 
-const parcelasIniciais: Parcela[] = [
-  { id: "p1", clienteId: "c1", descricao: "Plano Anual — Parcela 4/12", valor: 890, vencimento: dayOffset(0), status: "pendente" },
-  { id: "p2", clienteId: "c2", descricao: "Consultoria Tributária 2/3", valor: 2400, vencimento: dayOffset(0), status: "pendente" },
-  { id: "p3", clienteId: "c3", descricao: "Licença CRM Equipe 7/12", valor: 1580.5, vencimento: dayOffset(2), status: "pendente" },
-  { id: "p4", clienteId: "c4", descricao: "Projeto Identidade Visual 1/2", valor: 3200, vencimento: dayOffset(4), status: "pendente" },
-  { id: "p5", clienteId: "c5", descricao: "Manutenção Mensal", valor: 450, vencimento: dayOffset(6), status: "pendente" },
-  { id: "p6", clienteId: "c6", descricao: "Equipamento — Parcela 3/6", valor: 1120, vencimento: dayOffset(9), status: "pendente" },
-  { id: "p7", clienteId: "c7", descricao: "Assessoria Jurídica 5/8", valor: 760, vencimento: dayOffset(-3), status: "atrasado", lembreteEnviadoEm: dayOffset(-1) },
-  { id: "p8", clienteId: "c2", descricao: "Consultoria Tributária 1/3", valor: 2400, vencimento: dayOffset(-11), status: "atrasado" },
-  { id: "p9", clienteId: "c5", descricao: "Setup Inicial", valor: 1900, vencimento: dayOffset(-6), status: "atrasado" },
-  { id: "p10", clienteId: "c1", descricao: "Plano Anual — Parcela 3/12", valor: 890, vencimento: dayOffset(-18), status: "pago" },
-  { id: "p11", clienteId: "c3", descricao: "Licença CRM Equipe 6/12", valor: 1580.5, vencimento: dayOffset(-22), status: "pago" },
-  { id: "p12", clienteId: "c4", descricao: "Briefing e Pesquisa", valor: 1400, vencimento: dayOffset(-14), status: "pago" },
-  { id: "p13", clienteId: "c6", descricao: "Equipamento — Parcela 2/6", valor: 1120, vencimento: dayOffset(-9), status: "pago" },
-  { id: "p14", clienteId: "c7", descricao: "Assessoria Jurídica 4/8", valor: 760, vencimento: dayOffset(-25), status: "pago" },
-];
+type ParcelaRow = {
+  id: string;
+  cliente_id: string;
+  descricao: string;
+  valor: number | string;
+  vencimento: string;
+  status: ParcelaStatus;
+  lembrete_enviado_em: string | null;
+};
+
+const mapParcela = (row: ParcelaRow): Parcela => ({
+  id: row.id,
+  clienteId: row.cliente_id,
+  descricao: row.descricao,
+  valor: Number(row.valor),
+  vencimento: row.vencimento,
+  status: row.status,
+  ...(row.lembrete_enviado_em ? { lembreteEnviadoEm: row.lembrete_enviado_em } : {}),
+});
 
 type CrmContextValue = {
   clientes: Cliente[];
   parcelas: Parcela[];
   whatsapp: WhatsappConfig;
+  carregando: boolean;
   setWhatsapp: (patch: Partial<WhatsappConfig>) => void;
-  addCliente: (input: Omit<Cliente, "id">) => Cliente;
-  addParcela: (input: Omit<Parcela, "id">) => void;
-  marcarPago: (id: string) => void;
-  registrarLembrete: (id: string) => void;
+  addCliente: (input: Omit<Cliente, "id">) => Promise<Cliente | null>;
+  addParcela: (input: Omit<Parcela, "id">) => Promise<void>;
+  marcarPago: (id: string) => Promise<void>;
+  registrarLembrete: (id: string) => Promise<void>;
   clienteDe: (id: string) => Cliente | undefined;
 };
 
 const CrmContext = createContext<CrmContextValue | null>(null);
 
 export function CrmProvider({ children }: { children: ReactNode }) {
-  const [clientes, setClientes] = useState<Cliente[]>(clientesIniciais);
-  const [parcelas, setParcelas] = useState<Parcela[]>(parcelasIniciais);
-  const [whatsapp, setWhatsappState] = useState<WhatsappConfig>({
-    provider: "meta",
-    apiToken: "",
-    instanceUrl: "",
-    phoneNumberId: "",
-    businessAccountId: "",
-    sessionName: "default",
-    status: "desconectado",
-    mensagemPadrao:
-      "Olá {{cliente}}, sua parcela de {{valor}} referente a {{descricao}} vence em {{vencimento}}. Qualquer dúvida, estamos por aqui!",
-    enviarAutomatico: true,
-  });
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [parcelas, setParcelas] = useState<Parcela[]>([]);
+  const [whatsapp, setWhatsappState] = useState<WhatsappConfig>(configPadrao);
+  const [carregando, setCarregando] = useState(true);
+
+  const recarregar = useCallback(async () => {
+    const [cl, pa, cfg] = await Promise.all([
+      supabase.from("clientes").select("id, nome, telefone").order("nome"),
+      supabase
+        .from("parcelas")
+        .select("id, cliente_id, descricao, valor, vencimento, status, lembrete_enviado_em")
+        .order("vencimento"),
+      supabase.from("whatsapp_config").select("*").eq("id", 1).maybeSingle(),
+    ]);
+
+    if (cl.data) setClientes(cl.data as Cliente[]);
+    if (pa.data) setParcelas((pa.data as ParcelaRow[]).map(mapParcela));
+    if (cfg.data) {
+      const c = cfg.data;
+      setWhatsappState({
+        provider: (c.provider as WhatsappProvider) ?? "meta",
+        apiToken: c.api_token ?? "",
+        instanceUrl: c.instance_url ?? "",
+        phoneNumberId: c.phone_number_id ?? "",
+        businessAccountId: c.business_account_id ?? "",
+        sessionName: c.session_name ?? "default",
+        status: (c.status as WhatsappConfig["status"]) ?? "desconectado",
+        ...(c.testado_em ? { testadoEm: c.testado_em } : {}),
+        mensagemPadrao: c.mensagem_padrao ?? configPadrao.mensagemPadrao,
+        enviarAutomatico: c.enviar_automatico ?? true,
+      });
+    }
+    setCarregando(false);
+  }, []);
+
+  useEffect(() => {
+    void recarregar();
+  }, [recarregar]);
+
+  const setWhatsapp = useCallback((patch: Partial<WhatsappConfig>) => {
+    setWhatsappState((prev) => {
+      const next = { ...prev, ...patch };
+      void supabase
+        .from("whatsapp_config")
+        .update({
+          provider: next.provider,
+          api_token: next.apiToken,
+          instance_url: next.instanceUrl,
+          phone_number_id: next.phoneNumberId,
+          business_account_id: next.businessAccountId,
+          session_name: next.sessionName,
+          status: next.status,
+          testado_em: next.testadoEm ?? null,
+          mensagem_padrao: next.mensagemPadrao,
+          enviar_automatico: next.enviarAutomatico,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", 1);
+      return next;
+    });
+  }, []);
 
   const value = useMemo<CrmContextValue>(
     () => ({
       clientes,
       parcelas,
       whatsapp,
-      setWhatsapp: (patch) => setWhatsappState((prev) => ({ ...prev, ...patch })),
-      addCliente: (input) => {
-        const cliente: Cliente = { ...input, id: `c${Date.now()}` };
+      carregando,
+      setWhatsapp,
+      addCliente: async (input) => {
+        const { data, error } = await supabase
+          .from("clientes")
+          .insert({ nome: input.nome, telefone: input.telefone })
+          .select("id, nome, telefone")
+          .single();
+        if (error || !data) return null;
+        const cliente = data as Cliente;
         setClientes((prev) => [...prev, cliente]);
         return cliente;
       },
-      addParcela: (input) =>
-        setParcelas((prev) => [...prev, { ...input, id: `p${Date.now()}` }]),
-      marcarPago: (id) =>
+      addParcela: async (input) => {
+        const { data } = await supabase
+          .from("parcelas")
+          .insert({
+            cliente_id: input.clienteId,
+            descricao: input.descricao,
+            valor: input.valor,
+            vencimento: input.vencimento,
+            status: input.status,
+          })
+          .select("id, cliente_id, descricao, valor, vencimento, status, lembrete_enviado_em")
+          .single();
+        if (data) setParcelas((prev) => [...prev, mapParcela(data as ParcelaRow)]);
+      },
+      marcarPago: async (id) => {
         setParcelas((prev) =>
           prev.map((p) => (p.id === id ? { ...p, status: "pago" as ParcelaStatus } : p)),
-        ),
-      registrarLembrete: (id) =>
+        );
+        await supabase.from("parcelas").update({ status: "pago" }).eq("id", id);
+      },
+      registrarLembrete: async (id) => {
+        const agora = new Date().toISOString();
         setParcelas((prev) =>
-          prev.map((p) =>
-            p.id === id ? { ...p, lembreteEnviadoEm: new Date().toISOString() } : p,
-          ),
-        ),
+          prev.map((p) => (p.id === id ? { ...p, lembreteEnviadoEm: agora } : p)),
+        );
+        await supabase.from("parcelas").update({ lembrete_enviado_em: agora }).eq("id", id);
+      },
       clienteDe: (id) => clientes.find((c) => c.id === id),
     }),
-    [clientes, parcelas, whatsapp],
+    [clientes, parcelas, whatsapp, carregando, setWhatsapp],
   );
 
   return <CrmContext.Provider value={value}>{children}</CrmContext.Provider>;
