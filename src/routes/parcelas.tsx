@@ -149,13 +149,13 @@ function ParcelasPage() {
             const total = itens.reduce((s, p) => s + p.valor, 0);
             return (
               <section key={col.key} className="rounded-xl bg-surface p-3">
-                <header className="mb-3 flex items-center justify-between px-1">
-                  <span className="flex items-center gap-2 text-sm font-medium">
+                <header className="mb-3 flex items-center justify-between gap-2 px-1">
+                  <span className="flex min-w-0 items-center gap-2 truncate text-sm font-medium">
                     <span className={`size-2 rounded-full ${col.accent}`} />
                     {col.label}
                     <span className="num text-xs text-muted-foreground">{itens.length}</span>
                   </span>
-                  <span className="num text-xs text-muted-foreground">{brl(total)}</span>
+                  <span className="num shrink-0 text-xs text-muted-foreground">{brl(total)}</span>
                 </header>
                 <div className="space-y-2.5">
                   {itens.map((p) => {
