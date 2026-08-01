@@ -14,7 +14,113 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      clientes: {
+        Row: {
+          created_at: string
+          id: string
+          nome: string
+          telefone: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nome: string
+          telefone: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nome?: string
+          telefone?: string
+        }
+        Relationships: []
+      }
+      parcelas: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          descricao: string
+          id: string
+          lembrete_enviado_em: string | null
+          status: Database["public"]["Enums"]["parcela_status"]
+          valor: number
+          vencimento: string
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          descricao: string
+          id?: string
+          lembrete_enviado_em?: string | null
+          status?: Database["public"]["Enums"]["parcela_status"]
+          valor?: number
+          vencimento: string
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          descricao?: string
+          id?: string
+          lembrete_enviado_em?: string | null
+          status?: Database["public"]["Enums"]["parcela_status"]
+          valor?: number
+          vencimento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "parcelas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_config: {
+        Row: {
+          api_token: string
+          business_account_id: string
+          enviar_automatico: boolean
+          id: number
+          instance_url: string
+          mensagem_padrao: string
+          phone_number_id: string
+          provider: string
+          session_name: string
+          status: string
+          testado_em: string | null
+          updated_at: string
+        }
+        Insert: {
+          api_token?: string
+          business_account_id?: string
+          enviar_automatico?: boolean
+          id?: number
+          instance_url?: string
+          mensagem_padrao?: string
+          phone_number_id?: string
+          provider?: string
+          session_name?: string
+          status?: string
+          testado_em?: string | null
+          updated_at?: string
+        }
+        Update: {
+          api_token?: string
+          business_account_id?: string
+          enviar_automatico?: boolean
+          id?: number
+          instance_url?: string
+          mensagem_padrao?: string
+          phone_number_id?: string
+          provider?: string
+          session_name?: string
+          status?: string
+          testado_em?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +129,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      parcela_status: "pendente" | "pago" | "atrasado"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +256,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      parcela_status: ["pendente", "pago", "atrasado"],
+    },
   },
 } as const
