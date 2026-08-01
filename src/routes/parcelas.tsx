@@ -279,14 +279,14 @@ function NovaParcelaDialog({
   aberto: boolean;
   setAberto: (v: boolean) => void;
   clientes: { id: string; nome: string; telefone: string }[];
-  addCliente: (c: { nome: string; telefone: string }) => { id: string };
+  addCliente: (c: { nome: string; telefone: string }) => Promise<{ id: string } | null>;
   addParcela: (p: {
     clienteId: string;
     descricao: string;
     valor: number;
     vencimento: string;
     status: ParcelaStatus;
-  }) => void;
+  }) => Promise<void>;
 }) {
   const [modo, setModo] = useState<"existente" | "novo">("existente");
   const [clienteId, setClienteId] = useState(clientes[0]?.id ?? "");
