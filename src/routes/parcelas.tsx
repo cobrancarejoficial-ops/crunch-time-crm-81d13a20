@@ -279,14 +279,14 @@ function NovaParcelaDialog({
   aberto: boolean;
   setAberto: (v: boolean) => void;
   clientes: { id: string; nome: string; telefone: string }[];
-  addCliente: (c: { nome: string; telefone: string }) => { id: string };
+  addCliente: (c: { nome: string; telefone: string }) => Promise<{ id: string } | null>;
   addParcela: (p: {
     clienteId: string;
     descricao: string;
     valor: number;
     vencimento: string;
     status: ParcelaStatus;
-  }) => void;
+  }) => Promise<void>;
 }) {
   const [modo, setModo] = useState<"existente" | "novo">("existente");
   const [clienteId, setClienteId] = useState(clientes[0]?.id ?? "");
@@ -296,7 +296,7 @@ function NovaParcelaDialog({
   const [valor, setValor] = useState("");
   const [vencimento, setVencimento] = useState(hojeISO());
 
-  const salvar = () => {
+  const salvar = async () => {
     const valorNum = Number(valor.replace(",", "."));
     if (!descricao || !valorNum) {
       toast.error("Informe descrição e valor da parcela.");
@@ -308,13 +308,18 @@ function NovaParcelaDialog({
         toast.error("Informe nome e telefone do novo cliente.");
         return;
       }
-      id = addCliente({ nome, telefone }).id;
+      const criado = await addCliente({ nome, telefone });
+      if (!criado) {
+        toast.error("Não foi possível salvar o cliente.");
+        return;
+      }
+      id = criado.id;
     }
     if (!id) {
       toast.error("Selecione um cliente.");
       return;
     }
-    addParcela({
+    await addParcela({
       clienteId: id,
       descricao,
       valor: valorNum,
