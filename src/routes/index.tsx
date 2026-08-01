@@ -118,7 +118,7 @@ function Dashboard() {
         ))}
       </div>
 
-      <div className="mt-6 grid gap-6 xl:grid-cols-[320px_1fr]">
+      <div className="mt-6 grid gap-6 2xl:grid-cols-[340px_1fr]">
         <div className="panel p-5">
           <h2 className="text-base font-semibold">Status das parcelas</h2>
           <p className="text-xs text-muted-foreground">Distribuição da carteira ativa</p>
