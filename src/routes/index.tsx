@@ -28,8 +28,7 @@ export const Route = createFileRoute("/")({
 function Dashboard() {
   const { parcelas, clienteDe, registrarLembrete, whatsapp } = useCrm();
 
-  const mesAtual = new Date().toISOString().slice(0, 7);
-  const doMes = parcelas.filter((p) => p.vencimento.startsWith(mesAtual));
+  const doMes = parcelas.filter((p) => Math.abs(diasAte(p.vencimento)) <= 30);
   const aReceber = doMes.filter((p) => p.status !== "pago").reduce((s, p) => s + p.valor, 0);
   const hoje = parcelas.filter((p) => diasAte(p.vencimento) === 0 && p.status !== "pago");
   const atrasadas = parcelas.filter((p) => p.status === "atrasado");
@@ -37,7 +36,7 @@ function Dashboard() {
 
   const kpis = [
     {
-      label: "Total a receber no mês",
+      label: "Total a receber (30 dias)",
       value: brl(aReceber),
       hint: `${doMes.filter((p) => p.status !== "pago").length} parcelas abertas`,
       icon: TrendingUp,
@@ -58,7 +57,7 @@ function Dashboard() {
       tone: "text-destructive bg-danger-soft",
     },
     {
-      label: "Total recebido",
+      label: "Total recebido (30 dias)",
       value: brl(recebido),
       hint: `${doMes.filter((p) => p.status === "pago").length} baixas no mês`,
       icon: CheckCircle2,
@@ -119,7 +118,7 @@ function Dashboard() {
         ))}
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[340px_1fr]">
+      <div className="mt-6 grid gap-6 xl:grid-cols-[320px_1fr]">
         <div className="panel p-5">
           <h2 className="text-base font-semibold">Status das parcelas</h2>
           <p className="text-xs text-muted-foreground">Distribuição da carteira ativa</p>
@@ -133,6 +132,7 @@ function Dashboard() {
                   innerRadius={62}
                   outerRadius={92}
                   paddingAngle={3}
+                  isAnimationActive={false}
                   strokeWidth={0}
                 >
                   {donut.map((d) => (
